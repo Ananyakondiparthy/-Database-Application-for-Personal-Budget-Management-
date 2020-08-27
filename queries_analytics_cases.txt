@@ -1,0 +1,67 @@
+----------------Case 2 ---------------------
+select ud.user_Id,td.Month_Year,sum(td.transaction_amt) total_transations from 
+user_details ud, Payment_method_details pmd,(select concat(MONTHNAME(Transaction_Date), '-', year(Transaction_Date)) as' Month_Year',td.* from  Transaction_details td) td
+where ud.user_id = pmd.user_id
+and pmd.payment_method_id = td.payment_method_id
+group by ud.user_Id,td.Month_Year;
+
+-----------------Case 3 -----------------
+select ud.user_Id,td.trans_week,sum(td.transaction_amt) total_transations from 
+user_details ud, Payment_method_details pmd,
+(select week(Transaction_Date) as 'trans_week',td.* from  Transaction_details td) td
+where ud.user_id = pmd.user_id
+and pmd.payment_method_id = td.payment_method_id
+group by ud.user_Id,td.trans_week
+order by ud.user_Id asc,trans_week desc; 
+
+
+----------------Case 4------------------------
+
+
+select ud.user_Id,(select  Category_Desc from categories c where c.Category_id = td.Category_id) as category,td.Month_Year,sum(td.transaction_amt) total_transations from 
+user_details ud, Payment_method_details pmd,
+(select concat(MONTHNAME(Transaction_Date), '-', year(Transaction_Date)) as' Month_Year',DATE_FORMAT(Transaction_Date,'%Y%m') as 'yearmonth',td.* from  Transaction_details td) td
+where ud.user_id = pmd.user_id
+and pmd.payment_method_id = td.payment_method_id
+and (td.category_id, ud.user_id ) in 
+(select cat_wise_sum.category_id ,cat_wise_sum.user_id from 
+(select ud.user_Id,td.category_id,td.Month_Year,sum(td.transaction_amt) total_transations from 
+user_details ud, Payment_method_details pmd,
+(select concat(MONTHNAME(Transaction_Date), '-', year(Transaction_Date)) as' Month_Year',td.* from  Transaction_details td) td
+where ud.user_id = pmd.user_id
+and pmd.payment_method_id = td.payment_method_id
+group by ud.user_Id,td.category_id,td.Month_Year) cat_wise_sum,
+(select ud.user_id , max(td.transaction_amt) max_transations from 
+user_details ud, Payment_method_details pmd,
+(select concat(MONTHNAME(Transaction_Date), '-', year(Transaction_Date)) as' Month_Year',DATE_FORMAT(Transaction_Date,'%Y%m') as 'yearmonth',td.* from  Transaction_details td) td,
+(select ud.user_id, MAX(DATE_FORMAT(Transaction_Date,'%Y%m')) LATEST_MONTH from transaction_details tran, payment_method_details pmd, user_details ud
+GROUP BY ud.user_id) LMU
+where ud.user_id = pmd.user_id
+and pmd.payment_method_id = td.payment_method_id
+and LMU.LATEST_MONTH = td.yearmonth
+and LMU.user_id = ud.user_id
+group by ud.user_Id) max_spent
+where cat_wise_sum.user_id = max_spent.user_id 
+and cat_wise_sum.total_transations = max_spent.max_transations)
+group by ud.user_Id,td.Month_Year
+order by ud.user_id asc,td.yearmonth desc
+;
+
+
+----------------Case 5 -------------------------
+
+
+select  user_id,Month_Year,
+case
+when monthly_budget <= (total_transations + loan_amt) then 'In budget'
+else 'Over Budget'
+end as budget_overflow
+ from (
+select ud.user_Id,td.Month_Year, ud.monthly_budget, sum(td.transaction_amt) total_transations,sum(sd.loan_amt) loan_amt from 
+user_details ud, Payment_method_details pmd,
+(select concat(MONTHNAME(Transaction_Date), '-', year(Transaction_Date)) as' Month_Year',td.* from  Transaction_details td) td,
+(select sum(Split_amount) loan_amt,Transaction_ID from transaction_split_details group by Transaction_ID) sd
+where ud.user_id = pmd.user_id
+and pmd.payment_method_id = td.payment_method_id
+and td.Transaction_ID = sd.Transaction_ID
+group by ud.user_Id,td.Month_Year) monthly_data;
